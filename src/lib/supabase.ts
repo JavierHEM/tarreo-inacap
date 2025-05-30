@@ -100,12 +100,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Faltan las variables de entorno de Supabase. Verifica tu archivo .env.local')
 }
 
+// Creamos un cliente con configuraciones diferentes para servidor/cliente
+const isBrowser = typeof window !== 'undefined';
+
 // Creamos el cliente con tipado
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
+    persistSession: isBrowser, // Solo persistir en el navegador
     autoRefreshToken: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: isBrowser // Solo detectar en el navegador
   }
 })
 

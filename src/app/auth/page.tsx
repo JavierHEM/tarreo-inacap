@@ -21,6 +21,13 @@ export default function AuthPage() {
     }
   }, [user, router])
 
+  // Función para validar que el correo tenga dominio de INACAP
+  const isValidInacapEmail = (email: string): boolean => {
+    const validDomains = ['inacapmail.cl', 'inacap.cl']
+    const emailDomain = email.split('@')[1]?.toLowerCase()
+    return emailDomain ? validDomains.includes(emailDomain) : false
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -38,6 +45,11 @@ export default function AuthPage() {
         setMessage('¡Inicio de sesión exitoso!')
         router.push('/')
       } else {
+        // Validar que el correo tenga dominio de INACAP
+        if (!isValidInacapEmail(email)) {
+          throw new Error('Solo se permiten correos con dominio @inacapmail.cl o @inacap.cl')
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,

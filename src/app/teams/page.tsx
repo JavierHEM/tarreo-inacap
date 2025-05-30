@@ -118,12 +118,18 @@ export default function TeamsPage() {
   }
 
   const getTeamStatus = (team: Team) => {
-    // Verificamos si el equipo está completo basado en el número mínimo de jugadores
-    const minPlayers = team.game?.min_team_size || 1
-    const isComplete = team.is_complete || (team.members?.length || 0) >= minPlayers
-    
-    return isComplete ? 'complete' : 'incomplete'
+  // Verificamos si el equipo está completo basado en el número requerido de jugadores
+  // Para Valorant, necesitamos exactamente 5 jugadores y sobrescribimos el campo is_complete
+  if (team.game?.name === 'Valorant') {
+    return (team.members?.length || 0) >= 5 ? 'complete' : 'incomplete'
   }
+  
+  // Para otros juegos, usamos la lógica original
+  const requiredPlayers = team.game?.min_team_size || 1
+  const isComplete = team.is_complete || (team.members?.length || 0) >= requiredPlayers
+  
+  return isComplete ? 'complete' : 'incomplete'
+}  
 
   // Verificar si el usuario está registrado como estudiante
   const checkStudentRecord = async () => {
@@ -271,21 +277,32 @@ export default function TeamsPage() {
     setProcessingRequest(requestId)
     
     try {
+      // Primero actualizamos el estado local inmediatamente para mejor UX
+      setPendingRequests(prevRequests => prevRequests.filter(req => req.id !== requestId))
+      
       // Obtener la solicitud
       const { data: request, error: reqError } = await supabase
         .from('team_join_requests')
         .select(`
           *,
-          team:teams(*)
+          team:teams(*),
+          student:students(*)
         `)
         .eq('id', requestId)
         .single()
       
-      if (reqError) throw reqError
+      if (reqError) {
+        // Si hay error, revertimos el cambio local
+        console.error('Error al obtener solicitud:', reqError)
+        showAlert('error', 'Ha ocurrido un error al aprobar la solicitud')
+        fetchJoinRequests() // Recargar estado original
+        return
+      }
       
       // Verificar que sea el capitán del equipo
       if (request.team.captain_id !== studentRecord.id) {
         showAlert('error', 'Solo el capitán puede aprobar solicitudes')
+        fetchJoinRequests() // Recargar estado original
         return
       }
       
@@ -295,7 +312,13 @@ export default function TeamsPage() {
         .update({ status: 'approved' })
         .eq('id', requestId)
       
-      if (updateError) throw updateError
+      if (updateError) {
+        // Si hay error, revertimos el cambio local
+        console.error('Error al actualizar solicitud:', updateError)
+        showAlert('error', 'Ha ocurrido un error al aprobar la solicitud')
+        fetchJoinRequests() // Recargar estado original
+        return
+      }
       
       // Agregar al estudiante como miembro del equipo
       const { error: memberError } = await supabase
@@ -305,7 +328,13 @@ export default function TeamsPage() {
           student_id: request.student_id
         }])
       
-      if (memberError) throw memberError
+      if (memberError) {
+        // Si hay error, revertimos el cambio local
+        console.error('Error al agregar miembro:', memberError)
+        showAlert('error', 'Ha ocurrido un error al agregar al estudiante al equipo')
+        fetchJoinRequests() // Recargar estado original
+        return
+      }
       
       // Actualizar el estado del equipo si ya está completo
       const { data: members, error: countError } = await supabase
@@ -313,9 +342,10 @@ export default function TeamsPage() {
         .select('id')
         .eq('team_id', request.team_id)
       
-      if (countError) throw countError
-      
-      if (members && members.length >= (request.team.game?.min_team_size || 1)) {
+      if (countError) {
+        console.error('Error al contar miembros:', countError)
+        // No revertimos cambios aquí porque ya se aprobó correctamente
+      } else if (members && members.length >= (request.team.game?.min_team_size || 1)) {
         await supabase
           .from('teams')
           .update({ is_complete: true })
@@ -324,12 +354,13 @@ export default function TeamsPage() {
       
       showAlert('success', 'Solicitud aprobada. El estudiante ha sido agregado al equipo.')
       
-      // Refrescar datos
+      // Refrescar datos de equipos para ver el nuevo miembro
       fetchTeams()
-      fetchJoinRequests()
+      // No llamamos a fetchJoinRequests() aquí para evitar conflictos con el estado local
     } catch (error) {
-      console.error('Error al aprobar solicitud:', error)
+      console.error('Error general al aprobar solicitud:', error)
       showAlert('error', 'Ha ocurrido un error al aprobar la solicitud')
+      fetchJoinRequests() // Recargar estado original en caso de error
     } finally {
       setProcessingRequest(null)
     }
@@ -342,39 +373,56 @@ export default function TeamsPage() {
     setProcessingRequest(requestId)
     
     try {
+      // Primero actualizamos el estado local inmediatamente para mejor UX
+      setPendingRequests(prevRequests => prevRequests.filter(req => req.id !== requestId))
+      
       // Obtener la solicitud
       const { data: request, error: reqError } = await supabase
         .from('team_join_requests')
         .select(`
           *,
-          team:teams(*)
+          team:teams(*),
+          student:students(*)
         `)
         .eq('id', requestId)
         .single()
       
-      if (reqError) throw reqError
+      if (reqError) {
+        // Si hay error, revertimos el cambio local
+        console.error('Error al obtener solicitud:', reqError)
+        showAlert('error', 'Ha ocurrido un error al rechazar la solicitud')
+        fetchJoinRequests() // Recargar estado original
+        return
+      }
       
       // Verificar que sea el capitán del equipo
       if (request.team.captain_id !== studentRecord.id) {
         showAlert('error', 'Solo el capitán puede rechazar solicitudes')
+        fetchJoinRequests() // Recargar estado original
         return
       }
       
-      // Actualizar el estado de la solicitud
-      const { error: updateError } = await supabase
+      // Eliminar la solicitud de la base de datos en lugar de solo marcarla como rechazada
+      const { error: deleteError } = await supabase
         .from('team_join_requests')
-        .update({ status: 'rejected' })
+        .delete()
         .eq('id', requestId)
       
-      if (updateError) throw updateError
+      if (deleteError) {
+        // Si hay error, revertimos el cambio local
+        console.error('Error al eliminar solicitud:', deleteError)
+        showAlert('error', 'Ha ocurrido un error al rechazar la solicitud')
+        fetchJoinRequests() // Recargar estado original
+        return
+      }
       
-      showAlert('info', 'Solicitud rechazada')
+      showAlert('success', 'Jugador rechazado correctamente')
       
-      // Refrescar datos
-      fetchJoinRequests()
+      // No llamamos a fetchJoinRequests() aquí para evitar conflictos con el estado local
     } catch (error) {
-      console.error('Error al rechazar solicitud:', error)
+      console.error('Error general al rechazar solicitud:', error)
       showAlert('error', 'Ha ocurrido un error al rechazar la solicitud')
+      fetchJoinRequests() // Recargar estado original en caso de error
     } finally {
       setProcessingRequest(null)
     }
