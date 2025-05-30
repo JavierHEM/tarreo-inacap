@@ -1,6 +1,8 @@
 // app/layout.tsx
 import './globals.css'
+import '../styles/announcement.css'
 import type { Metadata } from 'next'
+import AnnouncementWrapper from '@/components/AnnouncementWrapper'
 
 export const metadata: Metadata = {
   title: 'Tarreo Gamer Otoño 2025 - INACAP Osorno',
@@ -9,6 +11,8 @@ export const metadata: Metadata = {
   authors: [{ name: 'INACAP Osorno' }],
   viewport: 'width=device-width, initial-scale=1',
 }
+
+// Utilizamos un componente wrapper cliente para el anuncio
 
 export default function RootLayout({
   children,
@@ -32,6 +36,8 @@ export default function RootLayout({
         `}} />
       </head>
       <body className="bg-slate-900 text-slate-50" suppressHydrationWarning={true}>
+        {/* Componente de anuncio del evento */}
+        <AnnouncementWrapper />
         {children}
       </body>
     </html>
