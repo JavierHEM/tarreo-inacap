@@ -3,7 +3,7 @@
 import Layout, { Card, Button } from '@/components/Layout'
 import { useUser, supabase } from '@/lib/supabase'
 import { useState, useEffect } from 'react'
-import { Trophy, Star, Gamepad2, Users, Clock } from 'lucide-react'
+import { Trophy, Star, Gamepad2, Users, Clock, X, Info, Calendar, CheckCircle, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAlert } from '@/components/Alert'
 
@@ -31,6 +31,7 @@ export default function VotePage() {
   const [loadingGames, setLoadingGames] = useState(true)
   const [votingLoading, setVotingLoading] = useState<number | null>(null)
   const [studentRecord, setStudentRecord] = useState<{id: string} | null>(null)
+  const [showAnnouncement, setShowAnnouncement] = useState(false)
   
   // Sistema de alertas personalizadas
   const { alertProps, showAlert, hideAlert, AlertComponent } = useAlert()
@@ -44,6 +45,7 @@ export default function VotePage() {
     if (user) {
       checkStudentRecord()
       fetchGames()
+      setShowAnnouncement(true)
     }
   }, [user, loading])
 
@@ -252,10 +254,101 @@ export default function VotePage() {
     )
   }
 
+  // Componente Modal para el anuncio
+  const AnnouncementModal = () => {
+    if (!showAnnouncement) return null
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+        <div className="bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-fade-in">
+          <div className="sticky top-0 bg-purple-900 rounded-t-xl px-6 py-4 flex justify-between items-center">
+            <h2 className="text-xl font-bold text-white flex items-center">
+              <Info className="h-5 w-5 mr-2 text-purple-300" />
+              Anuncio Importante
+            </h2>
+            <button 
+              onClick={() => setShowAnnouncement(false)}
+              className="text-white hover:text-purple-200 p-1 rounded-full hover:bg-white/10 transition-all"
+              aria-label="Cerrar anuncio"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          
+          <div className="px-6 py-5 text-white">
+            <div className="text-center mb-6">
+              <h3 className="text-2xl font-bold mb-2">
+                🎮 Tarreo Gamer Otoño 2025 🎮
+              </h3>
+            </div>
+            
+            <div className="space-y-4">
+              <p className="font-medium">
+                ¡Atención, gamers! El evento Tarreo Gamer Otoño 2025 se encuentra actualmente en el proceso de votación de los juegos.
+              </p>
+              
+              <div className="flex items-start space-x-3 bg-red-900/30 p-3 rounded-lg border border-red-600">
+                <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="font-semibold text-red-300">Las votaciones se cerrarán este lunes 2 de junio</span>, así que ¡no pierdas la oportunidad de hacer valer tu opinión!
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-start space-x-3">
+                  <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
+                  <p>Los 3 juegos más votados de la categoría PC pasarán directamente a formar parte del torneo oficial.</p>
+                </div>
+                
+                <div className="flex items-start space-x-3">
+                  <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
+                  <p>En cuanto a las categorías de consolas y juegos de mesa, los títulos ya están definidos y se mantienen tal como están.</p>
+                </div>
+                
+                <div className="flex items-start space-x-3">
+                  <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
+                  <p>Una vez que se anuncien oficialmente los juegos seleccionados de PC, se abrirán las inscripciones para que los alumnos puedan registrarse en su juego preferido.</p>
+                </div>
+                
+                <div className="flex items-start space-x-3">
+                  <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
+                  <p>Recuerda que los cupos son limitados.</p>
+                </div>
+                
+                <div className="flex items-start space-x-3">
+                  <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
+                  <p>Los alumnos que ya estaban inscritos tienen su cupo asegurado para el juego que eligieron previamente.</p>
+                </div>
+              </div>
+              
+              <div className="mt-6 text-center">
+                <p className="text-xl font-bold text-purple-300">
+                  ¡Prepárense para una noche épica de juegos y competencia!
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-gray-700 px-6 py-4 rounded-b-xl flex justify-end">
+            <button 
+              onClick={() => setShowAnnouncement(false)}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
   return (
     <Layout>
       {/* Componente de alertas personalizadas */}
       <AlertComponent />
+      
+      {/* Anuncio pop-up */}
+      <AnnouncementModal />
       
       <div className="px-4">
         {/* Header */}
