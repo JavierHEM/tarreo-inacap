@@ -1,4 +1,5 @@
 'use client'
+import React from 'react'
 import Layout, { Card, Button } from '@/components/Layout'
 import { useUser, supabase } from '@/lib/supabase'
 import { useState, useEffect } from 'react'
@@ -53,7 +54,23 @@ export default function TeamsPage() {
   const { alertProps, showAlert, hideAlert, AlertComponent } = useAlert()
   const [teams, setTeams] = useState<Team[]>([])
   const [loadingTeams, setLoadingTeams] = useState(true)
-  const [activeFilter, setActiveFilter] = useState<string>('all') // 'all', 'pc', 'console', 'board'
+  type CategoryType = 'all' | 'pc' | 'console' | 'board'
+  const [activeFilter, setActiveFilter] = useState<CategoryType>('all')
+  const [consolePlayers, setConsolePlayers] = useState<{[key: string]: Student[]}>({})
+  const [loadingConsolePlayers, setLoadingConsolePlayers] = useState(false)
+  const [showConsolePlayers, setShowConsolePlayers] = useState(false)
+  const [boardPlayers, setBoardPlayers] = useState<{[key: string]: Student[]}>({})
+  const [loadingBoardPlayers, setLoadingBoardPlayers] = useState(false)
+  const [showBoardPlayers, setShowBoardPlayers] = useState(false)
+  const [pcPlayers, setPcPlayers] = useState<{[key: string]: Student[]}>({})
+  const [loadingPcPlayers, setLoadingPcPlayers] = useState(false)
+  const [showPcPlayers, setShowPcPlayers] = useState(false)
+  
+  // Función para determinar si el filtro activo coincide con una categoría específica
+  const isActiveFilter = (category: CategoryType): boolean => {
+    return activeFilter === category
+  }
+  const [teamDetails, setTeamDetails] = useState<string | null>(null)
   const [requestingTeam, setRequestingTeam] = useState<string | null>(null)
   const [studentRecord, setStudentRecord] = useState<{id: string, full_name: string} | null>(null)
   const [pendingRequests, setPendingRequests] = useState<TeamJoinRequest[]>([])
@@ -68,6 +85,17 @@ export default function TeamsPage() {
       }
     }
   }, [loading, user])
+  
+  // Efecto para cargar jugadores según la categoría seleccionada
+  useEffect(() => {
+    if (activeFilter === 'console') {
+      fetchConsolePlayers()
+    } else if (activeFilter === 'board') {
+      fetchBoardPlayers()
+    } else if (activeFilter === 'pc') {
+      fetchPcPlayers()
+    }
+  }, [activeFilter])
   
   // Efecto para cargar solicitudes pendientes cuando se tenga el registro de estudiante
   useEffect(() => {
@@ -118,17 +146,20 @@ export default function TeamsPage() {
   }
 
   const getTeamStatus = (team: Team) => {
-  // Verificamos si el equipo está completo basado en el número requerido de jugadores
-  // Para Valorant, necesitamos exactamente 5 jugadores y sobrescribimos el campo is_complete
+  // Obtenemos la cantidad actual de miembros
+  const currentMembers = team.members?.length || 0;
+  
+  // Obtenemos la capacidad máxima según el juego
+  const maxCapacity = team.game?.max_team_size || 1;
+  
+  // Un equipo solo está completo cuando alcanza su capacidad máxima
+  // Para Valorant, la capacidad máxima es siempre 5
   if (team.game?.name === 'Valorant') {
-    return (team.members?.length || 0) >= 5 ? 'complete' : 'incomplete'
+    return currentMembers >= 5 ? 'complete' : 'incomplete';
   }
   
-  // Para otros juegos, usamos la lógica original
-  const requiredPlayers = team.game?.min_team_size || 1
-  const isComplete = team.is_complete || (team.members?.length || 0) >= requiredPlayers
-  
-  return isComplete ? 'complete' : 'incomplete'
+  // Para otros juegos, verificamos si se ha alcanzado la capacidad máxima
+  return currentMembers >= maxCapacity ? 'complete' : 'incomplete';
 }  
 
   // Verificar si el usuario está registrado como estudiante
@@ -458,6 +489,165 @@ export default function TeamsPage() {
     return team.captain_id === member.id
   }
 
+  // Función para obtener todos los jugadores de juegos de consola
+  const fetchConsolePlayers = async () => {
+    try {
+      setLoadingConsolePlayers(true)
+      
+      // Obtener todos los juegos de consola
+      const { data: consoleGames, error: gamesError } = await supabase
+        .from('games')
+        .select('id, name')
+        .eq('category', 'console')
+      
+      if (gamesError) throw gamesError
+      
+      // Para cada juego, obtener los estudiantes inscritos
+      const playersMap: {[key: string]: Student[]} = {}
+      
+      for (const game of consoleGames) {
+        // Obtener las inscripciones para este juego usando la tabla registrations
+        const { data: registrations, error: registrationsError } = await supabase
+          .from('registrations')
+          .select('student_id')
+          .eq('game_id', game.id)
+          .eq('category', 'console')
+        
+        if (registrationsError) throw registrationsError
+        
+        if (registrations && registrations.length > 0) {
+          // Obtener los detalles de los estudiantes usando los IDs
+          const studentIds = registrations.map(reg => reg.student_id)
+          
+          const { data: students, error: studentsError } = await supabase
+            .from('students')
+            .select('*')
+            .in('id', studentIds)
+          
+          if (studentsError) throw studentsError
+          
+          if (students && students.length > 0) {
+            playersMap[game.name] = students
+          }
+        }
+      }
+      
+      setConsolePlayers(playersMap)
+      setShowConsolePlayers(true)
+    } catch (error) {
+      console.error('Error fetching console players:', error)
+      showAlert('error', 'Error al cargar jugadores de consola')
+    } finally {
+      setLoadingConsolePlayers(false)
+    }
+  }
+  
+  // Función para obtener todos los jugadores de juegos de mesa
+  const fetchBoardPlayers = async () => {
+    try {
+      setLoadingBoardPlayers(true)
+      
+      // Obtener todos los juegos de mesa
+      const { data: boardGames, error: gamesError } = await supabase
+        .from('games')
+        .select('id, name')
+        .eq('category', 'board')
+      
+      if (gamesError) throw gamesError
+      
+      // Para cada juego, obtener los estudiantes inscritos
+      const playersMap: {[key: string]: Student[]} = {}
+      
+      for (const game of boardGames) {
+        // Obtener las inscripciones para este juego usando la tabla registrations
+        const { data: registrations, error: registrationsError } = await supabase
+          .from('registrations')
+          .select('student_id')
+          .eq('game_id', game.id)
+          .eq('category', 'board')
+        
+        if (registrationsError) throw registrationsError
+        
+        if (registrations && registrations.length > 0) {
+          // Obtener los detalles de los estudiantes usando los IDs
+          const studentIds = registrations.map(reg => reg.student_id)
+          
+          const { data: students, error: studentsError } = await supabase
+            .from('students')
+            .select('*')
+            .in('id', studentIds)
+          
+          if (studentsError) throw studentsError
+          
+          if (students && students.length > 0) {
+            playersMap[game.name] = students
+          }
+        }
+      }
+      
+      setBoardPlayers(playersMap)
+      setShowBoardPlayers(true)
+    } catch (error) {
+      console.error('Error fetching board game players:', error)
+      showAlert('error', 'Error al cargar jugadores de juegos de mesa')
+    } finally {
+      setLoadingBoardPlayers(false)
+    }
+  }
+  
+  // Función para obtener todos los jugadores de juegos de PC
+  const fetchPcPlayers = async () => {
+    try {
+      setLoadingPcPlayers(true)
+      
+      // Obtener todos los juegos de PC
+      const { data: pcGames, error: gamesError } = await supabase
+        .from('games')
+        .select('id, name')
+        .eq('category', 'pc')
+      
+      if (gamesError) throw gamesError
+      
+      // Para cada juego, obtener los estudiantes inscritos
+      const playersMap: {[key: string]: Student[]} = {}
+      
+      for (const game of pcGames) {
+        // Obtener las inscripciones para este juego usando la tabla registrations
+        const { data: registrations, error: registrationsError } = await supabase
+          .from('registrations')
+          .select('student_id')
+          .eq('game_id', game.id)
+          .eq('category', 'pc')
+        
+        if (registrationsError) throw registrationsError
+        
+        if (registrations && registrations.length > 0) {
+          // Obtener los detalles de los estudiantes usando los IDs
+          const studentIds = registrations.map(reg => reg.student_id)
+          
+          const { data: students, error: studentsError } = await supabase
+            .from('students')
+            .select('*')
+            .in('id', studentIds)
+          
+          if (studentsError) throw studentsError
+          
+          if (students && students.length > 0) {
+            playersMap[game.name] = students
+          }
+        }
+      }
+      
+      setPcPlayers(playersMap)
+      setShowPcPlayers(true)
+    } catch (error) {
+      console.error('Error fetching PC game players:', error)
+      showAlert('error', 'Error al cargar jugadores de juegos de PC')
+    } finally {
+      setLoadingPcPlayers(false)
+    }
+  }
+
   if (loadingTeams) {
     return (
       <Layout>
@@ -467,193 +657,444 @@ export default function TeamsPage() {
       </Layout>
     )
   }
-
   return (
     <Layout>
       <AlertComponent />
       
-      <div className="px-4 py-8 max-w-6xl mx-auto">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
-            🎮 Equipos
-          </h1>
-          <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-            Conoce los equipos que participarán en el Tarreo Gamer
-          </p>
+      {/* Header de la página */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Equipos</h1>
+          <p className="text-gray-400">Explora los equipos formados para el evento o únete a uno</p>
         </div>
-
-        {/* Solicitudes pendientes para capitanes */}
-        {pendingRequests.length > 0 && (
-          <div className="mb-10 bg-blue-900/30 p-6 rounded-lg border border-blue-500/30">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold text-white">
-                Solicitudes pendientes ({pendingRequests.length})
-              </h2>
-              <Button 
-                onClick={() => setShowingRequests(!showingRequests)} 
-                className="px-4 py-2"
-              >
-                {showingRequests ? 'Ocultar' : 'Mostrar'}
-              </Button>
-            </div>
-            
-            {showingRequests && (
-              <div className="space-y-4">
-                {pendingRequests.map(request => (
-                  <div key={request.id} className="bg-blue-950/50 p-4 rounded-lg border border-blue-500/20 flex justify-between items-center">
-                    <div>
-                      <p className="text-white font-medium">{request.student?.full_name}</p>
-                      <p className="text-sm text-gray-300">Solicita unirse a: {request.team?.name}</p>
-                    </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => approveJoinRequest(request.id)}
-                        disabled={processingRequest === request.id}
-                        className="p-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors disabled:opacity-50"
-                      >
-                        <Check size={18} />
-                      </button>
-                      <button
-                        onClick={() => rejectJoinRequest(request.id)}
-                        disabled={processingRequest === request.id}
-                        className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors disabled:opacity-50"
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        
+        {/* Botones para ver solicitudes (solo para usuarios autenticados) */}
+        {user && studentRecord && (
+          <Button 
+            onClick={() => setShowingRequests(!showingRequests)}
+            className="mt-4 md:mt-0"
+          >
+            {showingRequests ? 'Volver a equipos' : 'Ver solicitudes'}
+          </Button>
         )}
-
-        {/* Filtros de categoría */}
-        <div className="mb-8 flex flex-wrap gap-4 justify-center">
-          <Button
+      </div>
+      
+      {/* Vista de solicitudes pendientes (si showingRequests es true) */}
+      {showingRequests && user && (
+        <div className="mb-8 bg-gray-800 p-6 rounded-lg">
+          <h2 className="text-xl font-bold text-white mb-4">Solicitudes Pendientes</h2>
+          
+          {pendingRequests.length > 0 ? (
+            <div className="space-y-4">
+              {pendingRequests.map(request => (
+                <div key={request.id} className="bg-gray-700 p-4 rounded-lg">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-medium text-white">
+                        {request.team?.name || 'Equipo desconocido'}
+                      </h3>
+                      <p className="text-gray-300 text-sm">
+                        Juego: {request.team?.game?.name || 'No especificado'}
+                      </p>
+                      {request.team?.captain_id === studentRecord?.id && (
+                        <p className="text-gray-300 text-sm">
+                          Solicitud de: {request.student?.full_name || 'Usuario desconocido'}
+                        </p>
+                      )}
+                      <p className="text-yellow-400 text-sm mt-1 flex items-center">
+                        <Clock className="h-4 w-4 mr-1" /> Pendiente
+                      </p>
+                    </div>
+                    
+                    {/* Si el usuario es el capitán, mostrar botones para aprobar/rechazar */}
+                    {request.team?.captain_id === studentRecord?.id && (
+                      <div className="mt-4 md:mt-0 space-x-3 flex">
+                        <button
+                          onClick={() => approveJoinRequest(request.id)}
+                          disabled={processingRequest === request.id}
+                          className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 flex items-center"
+                        >
+                          <Check className="h-4 w-4 mr-1" /> Aprobar
+                        </button>
+                        <button
+                          onClick={() => rejectJoinRequest(request.id)}
+                          disabled={processingRequest === request.id}
+                          className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center"
+                        >
+                          <X className="h-4 w-4 mr-1" /> Rechazar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-400">No hay solicitudes pendientes</p>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Filtros de categoría */}
+      {!showingRequests && (
+        <div className="mb-6 flex flex-wrap gap-3">
+          <Button 
             onClick={() => setActiveFilter('all')}
-            className={`px-6 py-3 text-lg font-medium ${activeFilter === 'all' ? 'bg-purple-600' : 'bg-gray-700'}`}
+            className={activeFilter === 'all' ? 'bg-indigo-600' : ''}
           >
             Todos
           </Button>
-          <Button
-            onClick={() => setActiveFilter('pc')}
-            className={`px-6 py-3 text-lg font-medium ${activeFilter === 'pc' ? 'bg-purple-600' : 'bg-gray-700'}`}
+          <Button 
+            onClick={() => {
+              setActiveFilter('pc')
+              fetchPcPlayers()
+            }}
+            className={activeFilter === 'pc' ? 'bg-indigo-600' : ''}
           >
             PC
           </Button>
-          <Button
-            onClick={() => setActiveFilter('console')}
-            className={`px-6 py-3 text-lg font-medium ${activeFilter === 'console' ? 'bg-purple-600' : 'bg-gray-700'}`}
+          <Button 
+            onClick={() => {
+              setActiveFilter('console')
+              fetchConsolePlayers()
+            }}
+            className={activeFilter === 'console' ? 'bg-indigo-600' : ''}
           >
             Consola
           </Button>
-          <Button
-            onClick={() => setActiveFilter('board')}
-            className={`px-6 py-3 text-lg font-medium ${activeFilter === 'board' ? 'bg-purple-600' : 'bg-gray-700'}`}
+          <Button 
+            onClick={() => {
+              setActiveFilter('board')
+              fetchBoardPlayers()
+            }}
+            className={activeFilter === 'board' ? 'bg-indigo-600' : ''}
           >
             Juegos de Mesa
           </Button>
         </div>
-        
-        {/* Lista de equipos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {getFilteredTeams().length > 0 ? (
-            getFilteredTeams().map(team => (
-              <Card key={team.id} className="overflow-hidden">
-                <div className="bg-gradient-to-r from-purple-900 to-blue-900 p-4">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-white">{team.name}</h2>
-                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      getTeamStatus(team) === 'complete' 
-                        ? 'bg-green-600 text-white' 
-                        : 'bg-yellow-600 text-white'
-                    }`}>
-                      {getTeamStatus(team) === 'complete' ? (
-                        <span className="flex items-center">
-                          <Check className="h-3 w-3 mr-1" /> 
-                          Completo
-                        </span>
-                      ) : (
-                        <span className="flex items-center">
-                          <Clock className="h-3 w-3 mr-1" /> 
-                          Buscando jugadores
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-4 bg-white/5 border-b border-white/10">
-                  <div className="flex items-center mb-2">
-                    <Trophy className="h-5 w-5 text-purple-400 mr-2" />
-                    <span className="text-gray-300 font-medium">
-                      {team.game?.name || 'Juego no especificado'}
+      )}
+      
+      {/* Sección de jugadores de consola */}
+      {!showingRequests && activeFilter === 'console' && showConsolePlayers && (
+        <div className="mb-8 bg-gray-800 p-6 rounded-lg">
+          <h2 className="text-xl font-bold text-white mb-4">Jugadores inscritos en Juegos de Consola</h2>
+          
+          {loadingConsolePlayers ? (
+            <div className="flex justify-center items-center h-24">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            </div>
+          ) : Object.keys(consolePlayers).length > 0 ? (
+            <div className="space-y-8">
+              {Object.entries(consolePlayers).map(([gameName, players]) => (
+                <div key={gameName} className="bg-gray-700 rounded-lg overflow-hidden">
+                  <div className="bg-indigo-900 px-4 py-3 flex justify-between items-center">
+                    <h3 className="text-lg font-medium text-white">{gameName}</h3>
+                    <span className="bg-indigo-600 text-white text-sm px-2 py-1 rounded-full">
+                      Total: {players.length} jugadores
                     </span>
                   </div>
-                  <div className="flex items-center">
-                    <Shield className="h-5 w-5 text-blue-400 mr-2" />
-                    <span className="text-gray-300">
-                      Categoría: {getCategoryName(team.category)}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="p-4">
-                  <h4 className="text-white font-medium mb-3">Miembros ({team.members?.length || 0}/{team.game?.max_team_size || '?'})</h4>
-                  <ul className="space-y-2">
-                    {team.members?.map(member => (
-                      <li key={member.id} className="flex items-center space-x-2 p-2 rounded bg-white/5">
-                        <User className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <p className="text-white font-medium">{member.full_name}</p>
-                          <p className="text-xs text-gray-400">{member.career}</p>
-                        </div>
-                        {member.id === team.captain_id && (
-                          <span className="bg-yellow-600 text-white text-xs px-2 py-1 rounded-full ml-auto">
-                            Capitán
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
                   
-                  {/* Botón para solicitar unirse al equipo */}
-                  {user && studentRecord && !team.is_complete && 
-                   !team.members?.some(m => m.id === studentRecord.id) && 
-                   team.captain_id !== studentRecord.id && (
-                    <div className="mt-4">
-                      <button 
-                        onClick={() => requestToJoinTeam(team.id)}
-                        disabled={requestingTeam === team.id}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm flex items-center justify-center w-full disabled:opacity-50"
-                      >
-                        {requestingTeam === team.id ? 'Enviando solicitud...' : (
-                          <>
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Solicitar unirse
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
+                  <div className="p-4">
+                    {players.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {players.map((player) => (
+                          <div key={player.id} className="bg-gray-800 p-3 rounded-lg flex items-center">
+                            <User className="h-5 w-5 text-indigo-400 mr-3" />
+                            <div>
+                              <p className="text-white font-medium">{player.full_name}</p>
+                              <p className="text-gray-400 text-sm">{player.career}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-center py-4">No hay jugadores inscritos en este juego</p>
+                    )}
+                  </div>
                 </div>
-              </Card>
-            ))
+              ))}
+            </div>
           ) : (
-            <div className="col-span-full text-center py-10">
-              <Shield className="h-16 w-16 text-gray-500 mx-auto mb-4" />
-              <h3 className="text-xl font-medium text-white mb-2">No hay equipos para mostrar</h3>
-              <p className="text-gray-400">
-                {activeFilter === 'all' 
-                  ? 'Aún no se han formado equipos para el evento'
-                  : `No hay equipos registrados en la categoría ${getCategoryName(activeFilter)}`
-                }
-              </p>
+            <div className="text-center py-8">
+              <p className="text-gray-400">No hay jugadores inscritos en juegos de consola</p>
             </div>
           )}
         </div>
-      </div>
+      )}
+      
+      {/* Sección para mostrar equipos PC incompletos */}
+      {!showingRequests && activeFilter === 'pc' && (
+        <div className="mb-8 bg-gray-800 p-6 rounded-lg">
+          <h2 className="text-xl font-bold text-white mb-4">Equipos de PC buscando jugadores</h2>
+          
+          {loadingTeams ? (
+            <div className="flex justify-center items-center h-24">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {teams
+                .filter(team => team.category === 'pc' && getTeamStatus(team) === 'incomplete')
+                .map(team => (
+                  <div key={team.id} className="bg-gray-700 rounded-lg overflow-hidden">
+                    <div className="bg-purple-900 px-4 py-3 flex flex-wrap justify-between items-center gap-2">
+                      <div>
+                        <h3 className="text-lg font-medium text-white">{team.name}</h3>
+                        <p className="text-purple-200 text-sm">{team.game?.name || 'No especificado'}</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-gray-200 text-sm flex items-center">
+                          <Users className="h-4 w-4 mr-1 text-gray-400" /> 
+                          {team.members?.length || 0}/{team.game?.max_team_size || '?'}
+                        </span>
+                        {user && studentRecord && !team.members?.some(m => m.id === studentRecord.id) && 
+                        team.captain_id !== studentRecord.id && (
+                          <button 
+                            onClick={() => requestToJoinTeam(team.id)}
+                            disabled={requestingTeam === team.id}
+                            className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 flex items-center"
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            {requestingTeam === team.id ? 'Enviando solicitud...' : 'Unirse al equipo'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="p-4">
+                      <h4 className="font-semibold text-white mb-2">Integrantes actuales:</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {team.members && team.members.length > 0 ? (
+                          team.members.map(member => (
+                            <div key={member.id} className="flex items-center bg-gray-800 p-2 rounded">
+                              <User className="h-4 w-4 text-gray-400 mr-2" />
+                              <span className="text-gray-200">{member.full_name}</span>
+                              {isCaptain(team, member) && (
+                                <span className="ml-2 text-xs bg-purple-700 text-white px-1 py-0.5 rounded">Capitán</span>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-gray-400">No hay miembros registrados</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              
+              {teams.filter(team => team.category === 'pc' && getTeamStatus(team) === 'incomplete').length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-400">No hay equipos de PC buscando jugadores</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Sección de jugadores de PC */}
+      {!showingRequests && activeFilter === 'pc' && showPcPlayers && (
+        <div className="mb-8 bg-gray-800 p-6 rounded-lg">
+          <h2 className="text-xl font-bold text-white mb-4">Jugadores inscritos en Juegos de PC</h2>
+          
+          {loadingPcPlayers ? (
+            <div className="flex justify-center items-center h-24">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            </div>
+          ) : Object.keys(pcPlayers).length > 0 ? (
+            <div className="space-y-8">
+              {Object.entries(pcPlayers).map(([gameName, players]) => (
+                <div key={gameName} className="bg-gray-700 rounded-lg overflow-hidden">
+                  <div className="bg-purple-900 px-4 py-3 flex justify-between items-center">
+                    <h3 className="text-lg font-medium text-white">{gameName}</h3>
+                    <span className="bg-purple-700 text-white text-sm px-2 py-1 rounded-full">
+                      Total: {players.length} jugadores
+                    </span>
+                  </div>
+                  
+                  <div className="p-4">
+                    {players.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {players.map((player) => (
+                          <div key={player.id} className="bg-gray-800 p-3 rounded-lg flex items-center">
+                            <User className="h-5 w-5 text-purple-400 mr-3" />
+                            <div>
+                              <p className="text-white font-medium">{player.full_name}</p>
+                              <p className="text-gray-400 text-sm">{player.career}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-center py-4">No hay jugadores inscritos en este juego</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-400">No hay jugadores inscritos en juegos de PC</p>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Sección de jugadores de juegos de mesa */}
+      {!showingRequests && activeFilter === 'board' && showBoardPlayers && (
+        <div className="mb-8 bg-gray-800 p-6 rounded-lg">
+          <h2 className="text-xl font-bold text-white mb-4">Jugadores inscritos en Juegos de Mesa</h2>
+          
+          {loadingBoardPlayers ? (
+            <div className="flex justify-center items-center h-24">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            </div>
+          ) : Object.keys(boardPlayers).length > 0 ? (
+            <div className="space-y-8">
+              {Object.entries(boardPlayers).map(([gameName, players]) => (
+                <div key={gameName} className="bg-gray-700 rounded-lg overflow-hidden">
+                  <div className="bg-green-900 px-4 py-3 flex justify-between items-center">
+                    <h3 className="text-lg font-medium text-white">{gameName}</h3>
+                    <span className="bg-green-700 text-white text-sm px-2 py-1 rounded-full">
+                      Total: {players.length} jugadores
+                    </span>
+                  </div>
+                  
+                  <div className="p-4">
+                    {players.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {players.map((player) => (
+                          <div key={player.id} className="bg-gray-800 p-3 rounded-lg flex items-center">
+                            <User className="h-5 w-5 text-green-400 mr-3" />
+                            <div>
+                              <p className="text-white font-medium">{player.full_name}</p>
+                              <p className="text-gray-400 text-sm">{player.career}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-center py-4">No hay jugadores inscritos en este juego</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-400">No hay jugadores inscritos en juegos de mesa</p>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Vista unificada de tabla para todas las categorías */}
+      {!showingRequests && (
+        <div className="overflow-x-auto rounded-lg border border-gray-800">
+          <table className="min-w-full bg-gray-900">
+            <thead className="bg-indigo-900 bg-opacity-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Nombre del Equipo</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Juego</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Estado</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Miembros</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Capitán</th>
+                <th className="px-4 py-3 text-xs font-medium text-white uppercase tracking-wider text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-800">
+              {getFilteredTeams().length > 0 ? (
+                getFilteredTeams().map(team => (
+                  <React.Fragment key={team.id}>
+                    <tr className={`${teamDetails === team.id ? 'bg-gray-800' : 'hover:bg-gray-800'}`}>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm font-medium text-white">{team.name}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm text-gray-300">{team.game?.name || 'No especificado'}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getTeamStatus(team) === 'complete' ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'}`}>
+                          {getTeamStatus(team) === 'complete' ? 'Completo' : 'Buscando jugadores'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
+                        {team.members?.length || 0}/{team.game?.max_team_size || '?'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm text-gray-300">{team.captain?.full_name || 'No especificado'}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-right">
+                        <div className="flex space-x-3 justify-end">
+                          {user && studentRecord && getTeamStatus(team) !== 'complete' && 
+                           !team.members?.some(m => m.id === studentRecord.id) && 
+                           team.captain_id !== studentRecord.id && (
+                            <button 
+                              onClick={() => requestToJoinTeam(team.id)}
+                              disabled={requestingTeam === team.id}
+                              className={`px-3 py-1.5 text-white text-xs rounded disabled:opacity-50 flex items-center ${team.category === 'pc' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                            >
+                              <UserPlus className="h-3.5 w-3.5 mr-1" />
+                              {requestingTeam === team.id ? 'Enviando...' : 'Unirse'}
+                            </button>
+                          )}
+                          
+                          <button 
+                            onClick={() => setTeamDetails(teamDetails === team.id ? null : team.id)}
+                            className="px-2 py-1 bg-gray-700 text-white text-xs rounded hover:bg-gray-600"
+                          >
+                            {teamDetails === team.id ? 'Ocultar detalles' : 'Ver detalles'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    
+                    {/* Panel de detalles del equipo como fila expandible */}
+                    {teamDetails === team.id && (
+                      <tr className="bg-gray-800 border-b border-gray-700">
+                        <td colSpan={6} className="px-4 py-3">
+                          <div className="text-left">
+                            <h4 className="font-semibold text-white mb-2">Integrantes del equipo:</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                              {team.members && team.members.length > 0 ? (
+                                team.members.map((member) => (
+                                  <div key={member.id} className="flex items-center bg-gray-700 bg-opacity-50 p-2 rounded">
+                                    <User className="h-4 w-4 text-gray-400 mr-2" />
+                                    <span className="text-gray-200">{member.full_name}</span>
+                                    {isCaptain(team, member) && (
+                                      <span className="ml-2 text-xs bg-purple-700 text-white px-1 py-0.5 rounded">Capitán</span>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-gray-400">No hay miembros registrados</div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-6 py-10 text-center">
+                    <Shield className="h-12 w-12 text-gray-500 mx-auto mb-3" />
+                    <p className="text-gray-400">
+                      {isActiveFilter('all')
+                        ? 'Aún no se han formado equipos para el evento'
+                        : `No hay equipos registrados en la categoría ${isActiveFilter('pc') ? 'PC' : isActiveFilter('console') ? 'Consola' : 'Juegos de Mesa'}`
+                      }
+                    </p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Layout>
   )
 }
