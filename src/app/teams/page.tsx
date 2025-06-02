@@ -48,6 +48,22 @@ interface TeamJoinRequest {
   team?: Team
 }
 
+// Interfaz para las solicitudes de búsqueda de equipo
+interface LookingForTeamRequest {
+  id: string
+  student_id: string
+  game_id: number
+  player_role: string | null
+  player_rank: string | null
+  availability: string | null
+  message: string | null
+  category: string
+  status: string
+  created_at: string
+  student?: Student
+  game?: Game
+}
+
 export default function TeamsPage() {
   const { user, loading } = useUser()
   const router = useRouter()
@@ -76,15 +92,46 @@ export default function TeamsPage() {
   const [pendingRequests, setPendingRequests] = useState<TeamJoinRequest[]>([])
   const [processingRequest, setProcessingRequest] = useState<string | null>(null)
   const [showingRequests, setShowingRequests] = useState(false)
+  
+  // Estados para la funcionalidad "Buscando Equipo"
+  const [lookingForTeamModalOpen, setLookingForTeamModalOpen] = useState(false)
+  const [lookingForTeamRequests, setLookingForTeamRequests] = useState<LookingForTeamRequest[]>([])
+  const [loadingLookingForTeam, setLoadingLookingForTeam] = useState(false)
+  const [showLookingForTeam, setShowLookingForTeam] = useState(false)
+  const [selectedGameForLFT, setSelectedGameForLFT] = useState<number | null>(null)
+  const [playerRoleForLFT, setPlayerRoleForLFT] = useState('')
+  const [playerRankForLFT, setPlayerRankForLFT] = useState('')
+  const [availabilityForLFT, setAvailabilityForLFT] = useState('')
+  const [messageForLFT, setMessageForLFT] = useState('')
+  const [games, setGames] = useState<Game[]>([])
 
   useEffect(() => {
     if (!loading) {
       fetchTeams()
+      fetchGames()
+      
       if (user) {
         checkStudentRecord()
       }
     }
   }, [loading, user])
+  
+  // Función para cargar todos los juegos disponibles
+  const fetchGames = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .order('name')
+      
+      if (error) throw error
+      
+      setGames(data || [])
+    } catch (error) {
+      console.error('Error al cargar juegos:', error)
+      showAlert('error', 'No se pudieron cargar los juegos')
+    }
+  }
   
   // Efecto para cargar jugadores según la categoría seleccionada
   useEffect(() => {
@@ -101,8 +148,148 @@ export default function TeamsPage() {
   useEffect(() => {
     if (studentRecord) {
       fetchJoinRequests()
+      fetchLookingForTeamRequests()
     }
   }, [studentRecord])
+  
+  // Función para cargar solicitudes de búsqueda de equipo
+  const fetchLookingForTeamRequests = async () => {
+    try {
+      setLoadingLookingForTeam(true)
+      
+      // Obtener solicitudes de búsqueda de equipo
+      const { data, error } = await supabase
+        .from('looking_for_team')
+        .select(`
+          *,
+          student:students(*),
+          game:games(*)
+        `)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      
+      setLookingForTeamRequests(data || [])
+    } catch (error) {
+      console.error('Error al cargar solicitudes de búsqueda de equipo:', error)
+      showAlert('error', 'No se pudieron cargar las solicitudes de búsqueda de equipo')
+    } finally {
+      setLoadingLookingForTeam(false)
+    }
+  }
+  
+  // Función para crear una solicitud de búsqueda de equipo
+  const createLookingForTeamRequest = async () => {
+    if (!user || !studentRecord) {
+      showAlert('warning', 'Necesitas iniciar sesión y tener un perfil completo para buscar equipo')
+      return
+    }
+
+    if (!selectedGameForLFT) {
+      showAlert('warning', 'Debes seleccionar un juego')
+      return
+    }
+
+    try {
+      // Verificar si ya tiene una solicitud activa para este juego
+      const { data: existingRequests, error: checkError } = await supabase
+        .from('looking_for_team')
+        .select('id')
+        .eq('student_id', studentRecord.id)
+        .eq('game_id', selectedGameForLFT)
+        .eq('status', 'active')
+      
+      if (checkError) throw checkError
+      
+      if (existingRequests && existingRequests.length > 0) {
+        showAlert('warning', 'Ya tienes una solicitud activa para este juego')
+        return
+      }
+      
+      // Obtener la información del juego para la categoría
+      const { data: gameData, error: gameError } = await supabase
+        .from('games')
+        .select('category')
+        .eq('id', selectedGameForLFT)
+        .single()
+      
+      if (gameError) throw gameError
+      
+      // Crear la solicitud
+      const { error: insertError } = await supabase
+        .from('looking_for_team')
+        .insert([{
+          student_id: studentRecord.id,
+          game_id: selectedGameForLFT,
+          player_role: playerRoleForLFT || null,
+          player_rank: playerRankForLFT || null,
+          availability: availabilityForLFT || null,
+          message: messageForLFT || null,
+          category: gameData.category,
+          status: 'active'
+        }])
+      
+      if (insertError) throw insertError
+      
+      showAlert('success', 'Tu solicitud de búsqueda de equipo ha sido creada correctamente')
+      
+      // Limpiar el formulario
+      setSelectedGameForLFT(null)
+      setPlayerRoleForLFT('')
+      setPlayerRankForLFT('')
+      setAvailabilityForLFT('')
+      setMessageForLFT('')
+      
+      // Cerrar el modal
+      setLookingForTeamModalOpen(false)
+      
+      // Recargar las solicitudes
+      fetchLookingForTeamRequests()
+    } catch (error) {
+      console.error('Error al crear solicitud de búsqueda de equipo:', error)
+      showAlert('error', 'Ha ocurrido un error al crear tu solicitud')
+    }
+  }
+  
+  // Función para cancelar una solicitud de búsqueda de equipo
+  const cancelLookingForTeamRequest = async (requestId: string) => {
+    if (!user || !studentRecord) return
+    
+    try {
+      // Verificar que la solicitud pertenezca al usuario
+      const { data: request, error: requestError } = await supabase
+        .from('looking_for_team')
+        .select('student_id')
+        .eq('id', requestId)
+        .single()
+      
+      if (requestError) throw requestError
+      
+      if (request.student_id !== studentRecord.id) {
+        showAlert('warning', 'No puedes cancelar una solicitud que no te pertenece')
+        return
+      }
+      
+      // Actualizar el estado de la solicitud a 'cancelled'
+      const { error } = await supabase
+        .from('looking_for_team')
+        .update({ status: 'cancelled' })
+        .eq('id', requestId)
+      
+      if (error) throw error
+      
+      // Actualizar el estado local eliminando la solicitud
+      setLookingForTeamRequests(prevRequests => 
+        prevRequests.filter(req => req.id !== requestId)
+      )
+      
+      showAlert('success', 'Solicitud cancelada correctamente')
+    } catch (error) {
+      console.error('Error al cancelar solicitud de búsqueda de equipo:', error)
+      showAlert('error', 'Ha ocurrido un error al cancelar la solicitud')
+    }
+  }
 
   const fetchTeams = async () => {
     try {
@@ -489,6 +676,8 @@ export default function TeamsPage() {
     return team.captain_id === member.id
   }
 
+  // La función getCategoryName ya está definida anteriormente
+
   // Función para obtener todos los jugadores de juegos de consola
   const fetchConsolePlayers = async () => {
     try {
@@ -739,40 +928,60 @@ export default function TeamsPage() {
       
       {/* Filtros de categoría */}
       {!showingRequests && (
-        <div className="mb-6 flex flex-wrap gap-3">
-          <Button 
-            onClick={() => setActiveFilter('all')}
-            className={activeFilter === 'all' ? 'bg-indigo-600' : ''}
-          >
-            Todos
-          </Button>
-          <Button 
-            onClick={() => {
-              setActiveFilter('pc')
-              fetchPcPlayers()
-            }}
-            className={activeFilter === 'pc' ? 'bg-indigo-600' : ''}
-          >
-            PC
-          </Button>
-          <Button 
-            onClick={() => {
-              setActiveFilter('console')
-              fetchConsolePlayers()
-            }}
-            className={activeFilter === 'console' ? 'bg-indigo-600' : ''}
-          >
-            Consola
-          </Button>
-          <Button 
-            onClick={() => {
-              setActiveFilter('board')
-              fetchBoardPlayers()
-            }}
-            className={activeFilter === 'board' ? 'bg-indigo-600' : ''}
-          >
-            Juegos de Mesa
-          </Button>
+        <div className="mb-6 flex flex-wrap gap-3 items-center justify-between">
+          <div className="flex flex-wrap gap-3">
+            <Button 
+              onClick={() => setActiveFilter('all')}
+              className={activeFilter === 'all' ? 'bg-indigo-600' : ''}
+            >
+              Todos
+            </Button>
+            <Button 
+              onClick={() => {
+                setActiveFilter('pc')
+                fetchPcPlayers()
+              }}
+              className={activeFilter === 'pc' ? 'bg-indigo-600' : ''}
+            >
+              PC
+            </Button>
+            <Button 
+              onClick={() => {
+                setActiveFilter('console')
+                fetchConsolePlayers()
+              }}
+              className={activeFilter === 'console' ? 'bg-indigo-600' : ''}
+            >
+              Consola
+            </Button>
+            <Button 
+              onClick={() => {
+                setActiveFilter('board')
+                fetchBoardPlayers()
+              }}
+              className={activeFilter === 'board' ? 'bg-indigo-600' : ''}
+            >
+              Juegos de Mesa
+            </Button>
+          </div>
+          
+          <div className="flex gap-3 mt-3 md:mt-0">
+            {studentRecord && (
+              <Button 
+                onClick={() => setLookingForTeamModalOpen(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white flex items-center"
+              >
+                <UserPlus className="h-4 w-4 mr-2" /> Buscando Equipo
+              </Button>
+            )}
+            
+            <Button 
+              onClick={() => setShowLookingForTeam(!showLookingForTeam)}
+              className={showLookingForTeam ? 'bg-green-600' : ''}
+            >
+              <Users className="h-4 w-4 mr-2" /> Ver Jugadores
+            </Button>
+          </div>
         </div>
       )}
       
@@ -1093,6 +1302,176 @@ export default function TeamsPage() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+      
+      {/* Modal para crear solicitud de búsqueda de equipo */}
+      {lookingForTeamModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg w-full max-w-md p-6 shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-white">Buscar Equipo</h3>
+              <button 
+                onClick={() => setLookingForTeamModalOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Juego *</label>
+                <select 
+                  value={selectedGameForLFT || ''}
+                  onChange={(e) => setSelectedGameForLFT(e.target.value ? parseInt(e.target.value) : null)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                >
+                  <option value="">Selecciona un juego</option>
+                  {games.map(game => (
+                    <option key={game.id} value={game.id}>
+                      {game.name} ({getCategoryName(game.category)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Rol de jugador (opcional)</label>
+                <input 
+                  type="text" 
+                  value={playerRoleForLFT}
+                  onChange={(e) => setPlayerRoleForLFT(e.target.value)}
+                  placeholder="Ej: Support, DPS, Tank, Jungler, etc."
+                  className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Rango (opcional)</label>
+                <input 
+                  type="text" 
+                  value={playerRankForLFT}
+                  onChange={(e) => setPlayerRankForLFT(e.target.value)}
+                  placeholder="Ej: Oro, Diamante, etc."
+                  className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Disponibilidad (opcional)</label>
+                <input 
+                  type="text" 
+                  value={availabilityForLFT}
+                  onChange={(e) => setAvailabilityForLFT(e.target.value)}
+                  placeholder="Ej: Tardes, fines de semana, etc."
+                  className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Mensaje (opcional)</label>
+                <textarea 
+                  value={messageForLFT}
+                  onChange={(e) => setMessageForLFT(e.target.value)}
+                  placeholder="Cuéntanos un poco sobre ti como jugador..."
+                  className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24"
+                />
+              </div>
+              
+              <div className="flex justify-end pt-2">
+                <Button 
+                  onClick={() => setLookingForTeamModalOpen(false)}
+                  className="mr-2 bg-gray-700 hover:bg-gray-600"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={createLookingForTeamRequest}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  Publicar solicitud
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Sección para mostrar jugadores buscando equipo */}
+      {!showingRequests && showLookingForTeam && (
+        <div className="mt-6 mb-8 bg-gray-800 p-6 rounded-lg">
+          <h2 className="text-xl font-bold text-white mb-4">Jugadores buscando equipo</h2>
+          
+          {loadingLookingForTeam ? (
+            <div className="flex justify-center items-center h-24">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            </div>
+          ) : lookingForTeamRequests.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {lookingForTeamRequests.map(request => (
+                <div key={request.id} className="bg-gray-700 rounded-lg overflow-hidden shadow-lg">
+                  <div className="bg-purple-900 px-4 py-3 flex justify-between items-center">
+                    <h3 className="font-medium text-white">{request.student?.full_name}</h3>
+                    <span className="bg-purple-700 text-white text-xs px-2 py-1 rounded-full">
+                      {getCategoryName(request.category)}
+                    </span>
+                  </div>
+                  
+                  <div className="p-4">
+                    <div className="mb-3">
+                      <p className="text-sm text-gray-300">Juego: <span className="text-white font-medium">{request.game?.name}</span></p>
+                      {request.player_role && (
+                        <p className="text-sm text-gray-300">Rol: <span className="text-white">{request.player_role}</span></p>
+                      )}
+                      {request.player_rank && (
+                        <p className="text-sm text-gray-300">Rango: <span className="text-white">{request.player_rank}</span></p>
+                      )}
+                      {request.availability && (
+                        <p className="text-sm text-gray-300">Disponibilidad: <span className="text-white">{request.availability}</span></p>
+                      )}
+                    </div>
+                    
+                    {request.message && (
+                      <div className="mb-3 border-t border-gray-600 pt-2">
+                        <p className="text-sm text-gray-300">{request.message}</p>
+                      </div>
+                    )}
+                    
+                    <div className="flex justify-between items-center border-t border-gray-600 pt-3 mt-2">
+                      <span className="text-xs text-gray-400">
+                        {new Date(request.created_at).toLocaleDateString()}
+                      </span>
+                      
+                      <div className="space-x-2">
+                        {studentRecord && request.student_id === studentRecord.id && (
+                          <Button
+                            onClick={() => cancelLookingForTeamRequest(request.id)}
+                            className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white"
+                          >
+                            Cancelar
+                          </Button>
+                        )}
+                        
+                        {studentRecord && request.student_id !== studentRecord.id && teams.some(t => t.captain_id === studentRecord.id && !t.is_complete) && (
+                          <Button
+                            className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            Contactar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-400">No hay jugadores buscando equipo actualmente</p>
+            </div>
+          )}
         </div>
       )}
     </Layout>

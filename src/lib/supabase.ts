@@ -78,6 +78,22 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['team_join_requests']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['team_join_requests']['Insert']>
+      },
+      looking_for_team: {
+        Row: {
+          id: string
+          student_id: string
+          game_id: number
+          player_role: string | null
+          player_rank: string | null
+          availability: string | null
+          message: string | null
+          category: string
+          status: string
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['looking_for_team']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['looking_for_team']['Insert']>
       }
     }
     Views: {

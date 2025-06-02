@@ -1,15 +1,20 @@
 // app/layout.tsx
 import './globals.css'
 import '../styles/announcement.css'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import AnnouncementWrapper from '@/components/AnnouncementWrapper'
+
+// Exportación separada para viewport según las recomendaciones de Next.js 15.3.2
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1
+}
 
 export const metadata: Metadata = {
   title: 'Tarreo Gamer Otoño 2025 - INACAP Osorno',
   description: 'Evento gamer nocturno para estudiantes de INACAP Sede Osorno. Torneos de videojuegos y juegos de mesa.',
   keywords: 'gaming, torneo, INACAP, Osorno, videojuegos, estudiantes',
-  authors: [{ name: 'INACAP Osorno' }],
-  viewport: 'width=device-width, initial-scale=1',
+  authors: [{ name: 'INACAP Osorno' }]
 }
 
 // Utilizamos un componente wrapper cliente para el anuncio

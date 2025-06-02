@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador de Jugadores - El Tarreo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            background: white;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        .requests-list {
+            grid-column: 1 / -1;
+        }
+
+        .request-item {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            transition: transform 0.2s ease;
+        }
+
+        .request-item:hover {
+            transform: translateX(5px);
+        }
+
+        .request-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .request-game {
+            font-weight: 700;
+            color: #333;
+            font-size: 1.1rem;
+        }
+
+        .request-time {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .request-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .request-detail {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+        }
+
+        .request-description {
+            color: #555;
+            font-style: italic;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #667eea;
+            color: white;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .card {
+                padding: 20px;
+            }
+        }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎮 Buscador de Jugadores</h1>
+            <p>Encuentra compañeros de juego perfectos para tu próxima partida</p>
+        </div>
+
+        <div class="main-content">
+            <!-- Formulario para crear solicitud -->
+            <div class="card">
+                <h2>
+                    <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                    </svg>
+                    Crear Solicitud
+                </h2>
+                
+                <form id="playerRequestForm">
+                    <div class="form-group">
+                        <label for="gameName">Juego *</label>
+                        <select id="gameName" required>
+                            <option value="">Selecciona un juego</option>
+                            <option value="League of Legends">League of Legends</option>
+                            <option value="Valorant">Valorant</option>
+                            <option value="CS2">Counter-Strike 2</option>
+                            <option value="Dota 2">Dota 2</option>
+                            <option value="Overwatch 2">Overwatch 2</option>
+                            <option value="Apex Legends">Apex Legends</option>
+                            <option value="Fortnite">Fortnite</option>
+                            <option value="Rocket League">Rocket League</option>
+                            <option value="FIFA 24">FIFA 24</option>
+                            <option value="Call of Duty">Call of Duty</option>
+                            <option value="Minecraft">Minecraft</option>
+                            <option value="Among Us">Among Us</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="playerRole">Rol/Posición</label>
+                            <input type="text" id="playerRole" placeholder="Ej: ADC, Support, Duelist">
+                        </div>
+                        <div class="form-group">
+                            <label for="playerRank">Rango</label>
+                            <input type="text" id="playerRank" placeholder="Ej: Gold, Diamond, Global">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="playersNeeded">Jugadores Necesarios</label>
+                            <select id="playersNeeded">
+                                <option value="1">1 jugador</option>
+                                <option value="2">2 jugadores</option>
+                                <option value="3">3 jugadores</option>
+                                <option value="4">4 jugadores</option>
+                                <option value="5+">5+ jugadores</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="gameMode">Modo de Juego</label>
+                            <input type="text" id="gameMode" placeholder="Ej: Ranked, Casual, Competitivo">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="availability">Horario Disponible</label>
+                        <input type="text" id="availability" placeholder="Ej: Tardes, Fines de semana, 18:00-22:00">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Descripción Adicional</label>
+                        <textarea id="description" placeholder="Describe qué tipo de jugador buscas, nivel de experiencia, si usas micrófono, etc."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="contactInfo">Información de Contacto *</label>
+                        <input type="text" id="contactInfo" placeholder="Discord, WhatsApp, Steam, etc." required>
+                    </div>
+
+                    <button type="submit" class="btn">Publicar Solicitud</button>
+                </form>
+            </div>
+
+            <!-- Formulario de búsqueda -->
+            <div class="card">
+                <h2>
+                    <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                    </svg>
+                    Buscar Jugadores
+                </h2>
+
+                <div class="form-group">
+                    <label for="searchGame">Filtrar por Juego</label>
+                    <select id="searchGame">
+                        <option value="">Todos los juegos</option>
+                        <option value="League of Legends">League of Legends</option>
+                        <option value="Valorant">Valorant</option>
+                        <option value="CS2">Counter-Strike 2</option>
+                        <option value="Dota 2">Dota 2</option>
+                        <option value="Overwatch 2">Overwatch 2</option>
+                        <option value="Apex Legends">Apex Legends</option>
+                        <option value="Fortnite">Fortnite</option>
+                        <option value="Rocket League">Rocket League</option>
+                        <option value="FIFA 24">FIFA 24</option>
+                        <option value="Call of Duty">Call of Duty</option>
+                        <option value="Minecraft">Minecraft</option>
+                        <option value="Among Us">Among Us</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="searchRole">Filtrar por Rol</label>
+                    <input type="text" id="searchRole" placeholder="Buscar por rol específico">
+                </div>
+
+                <div class="form-group">
+                    <label for="searchRank">Filtrar por Rango</label>
+                    <input type="text" id="searchRank" placeholder="Buscar por rango específico">
+                </div>
+
+                <button type="button" class="btn btn-secondary" onclick="filterRequests()">Aplicar Filtros</button>
+                <button type="button" class="btn" onclick="clearFilters()" style="margin-left: 10px; background: #6c757d;">Limpiar</button>
+            </div>
+
+            <!-- Lista de solicitudes -->
+            <div class="card requests-list">
+                <h2>
+                    <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zM4 18v-4h2v-2.5c0-1.1.9-2 2-2h2c1.1 0 2 .9 2 2V14h2v4H4zm14.5-13c.83 0 1.5.67 1.5 1.5v9c0 .83-.67 1.5-1.5 1.5S17 16.33 17 15.5v-9c0-.83.67-1.5 1.5-1.5z"/>
+                    </svg>
+                    Solicitudes Activas
+                    <span id="requestCount" class="badge">0</span>
+                </h2>
+                
+                <div id="requestsList">
+                    <div class="empty-state">
+                        <h3>No hay solicitudes activas</h3>
+                        <p>¡Sé el primero en crear una solicitud de jugador!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let playerRequests = [];
+
+        // Cargar datos guardados al iniciar
+        window.addEventListener('load', function() {
+            const savedRequests = localStorage.getItem('playerRequests');
+            if (savedRequests) {
+                playerRequests = JSON.parse(savedRequests);
+                displayRequests();
+            }
+        });
+
+        // Manejar envío del formulario
+        document.getElementById('playerRequestForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                id: Date.now(),
+                gameName: document.getElementById('gameName').value,
+                playerRole: document.getElementById('playerRole').value,
+                playerRank: document.getElementById('playerRank').value,
+                playersNeeded: document.getElementById('playersNeeded').value,
+                gameMode: document.getElementById('gameMode').value,
+                availability: document.getElementById('availability').value,
+                description: document.getElementById('description').value,
+                contactInfo: document.getElementById('contactInfo').value,
+                timestamp: new Date().toLocaleString('es-ES')
+            };
+
+            playerRequests.unshift(formData);
+            localStorage.setItem('playerRequests', JSON.stringify(playerRequests));
+            
+            // Limpiar formulario
+            this.reset();
+            
+            // Mostrar requests actualizados
+            displayRequests();
+            
+            // Mostrar mensaje de éxito
+            alert('¡Solicitud publicada exitosamente!');
+        });
+
+        function displayRequests(filteredRequests = null) {
+            const requestsList = document.getElementById('requestsList');
+            const requestCount = document.getElementById('requestCount');
+            const requests = filteredRequests || playerRequests;
+            
+            requestCount.textContent = requests.length;
+
+            if (requests.length === 0) {
+                requestsList.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No hay solicitudes que coincidan</h3>
+                        <p>${filteredRequests ? 'Intenta ajustar los filtros de búsqueda' : '¡Sé el primero en crear una solicitud de jugador!'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            requestsList.innerHTML = requests.map(request => `
+                <div class="request-item">
+                    <div class="request-header">
+                        <div class="request-game">${request.gameName}</div>
+                        <div class="request-time">${request.timestamp}</div>
+                    </div>
+                    
+                    <div class="request-details">
+                        ${request.playerRole ? `
+                            <div class="request-detail">
+                                <strong>Rol:</strong> ${request.playerRole}
+                            </div>
+                        ` : ''}
+                        ${request.playerRank ? `
+                            <div class="request-detail">
+                                <strong>Rango:</strong> ${request.playerRank}
+                            </div>
+                        ` : ''}
+                        <div class="request-detail">
+                            <strong>Jugadores:</strong> ${request.playersNeeded}
+                        </div>
+                        ${request.gameMode ? `
+                            <div class="request-detail">
+                                <strong>Modo:</strong> ${request.gameMode}
+                            </div>
+                        ` : ''}
+                        ${request.availability ? `
+                            <div class="request-detail">
+                                <strong>Horario:</strong> ${request.availability}
+                            </div>
+                        ` : ''}
+                        <div class="request-detail">
+                            <strong>Contacto:</strong> ${request.contactInfo}
+                        </div>
+                    </div>
+                    
+                    ${request.description ? `
+                        <div class="request-description">
+                            "${request.description}"
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        function filterRequests() {
+            const gameFilter = document.getElementById('searchGame').value.toLowerCase();
+            const roleFilter = document.getElementById('searchRole').value.toLowerCase();
+            const rankFilter = document.getElementById('searchRank').value.toLowerCase();
+
+            const filtered = playerRequests.filter(request => {
+                const matchesGame = !gameFilter || request.gameName.toLowerCase().includes(gameFilter);
+                const matchesRole = !roleFilter || request.playerRole.toLowerCase().includes(roleFilter);
+                const matchesRank = !rankFilter || request.playerRank.toLowerCase().includes(rankFilter);
+                
+                return matchesGame && matchesRole && matchesRank;
+            });
+
+            displayRequests(filtered);
+        }
+
+        function clearFilters() {
+            document.getElementById('searchGame').value = '';
+            document.getElementById('searchRole').value = '';
+            document.getElementById('searchRank').value = '';
+            displayRequests();
+        }
+
+        // Auto-filtrar mientras se escribe
+        document.getElementById('searchRole').addEventListener('input', filterRequests);
+        document.getElementById('searchRank').addEventListener('input', filterRequests);
+        document.getElementById('searchGame').addEventListener('change', filterRequests);
+    </script>
+</body>
+</html>
