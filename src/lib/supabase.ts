@@ -27,6 +27,13 @@ export interface Database {
           career: string
           has_team: boolean
           created_at: string
+          preferred_games: string[] | null
+          main_role: string | null
+          game_rank: string | null
+          discord_username: string | null
+          bio: string | null
+          profile_picture: string | null
+          role: 'user' | 'admin' | 'moderator' | null
         }
         Insert: Omit<Database['public']['Tables']['students']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['students']['Insert']>
@@ -94,6 +101,18 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['looking_for_team']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['looking_for_team']['Insert']>
+      },
+      app_settings: {
+        Row: {
+          id: string
+          key: string
+          value: string
+          description: string | null
+          last_updated: string
+          updated_by: string | null
+        }
+        Insert: Omit<Database['public']['Tables']['app_settings']['Row'], 'id' | 'last_updated'>
+        Update: Partial<Database['public']['Tables']['app_settings']['Insert']>
       }
     }
     Views: {

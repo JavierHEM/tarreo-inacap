@@ -1,18 +1,14 @@
 // components/Layout.tsx
 'use client'
-import { useUser } from '@/lib/supabase'
-import { Gamepad2, Users, Trophy, Settings, LogOut, Menu, X } from 'lucide-react'
+import { Gamepad2, Users, Trophy, Settings, Menu, X } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 interface LayoutProps {
   children: React.ReactNode
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const { user, loading, signOut } = useUser()
-  const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const navigation = [
@@ -24,13 +20,9 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Resultados', href: '/results', icon: Trophy },
   ]
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
-      </div>
-    )
-  }
+
+
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
@@ -62,39 +54,11 @@ export default function Layout({ children }: LayoutProps) {
               </div>
             </div>
 
-            {/* Usuario */}
-            <div className="hidden md:block">
-              {user ? (
-                <div className="flex items-center space-x-4">
-                  <span className="text-white text-sm">
-                    {user.email}
-                  </span>
-                  <button
-                    onClick={async () => {
-                      await signOut()
-                      router.push('/')
-                    }}
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-sm flex items-center space-x-1 transition-colors"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    <span>Salir</span>
-                  </button>
-                </div>
-              ) : (
-                <Link
-                  href="/auth"
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Iniciar Sesión
-                </Link>
-              )}
-            </div>
-
-            {/* Botón menú móvil */}
-            <div className="md:hidden">
+            {/* Menú hamburguesa - mobile */}
+            <div className="-mr-2 flex md:hidden">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="bg-gray-800 inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700"
+                className="bg-gray-800 inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none"
               >
                 {mobileMenuOpen ? (
                   <X className="block h-6 w-6" />
@@ -108,8 +72,8 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Menú móvil */}
         {mobileMenuOpen && (
-          <div className="md:hidden">
-            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-black/30">
+          <div className="md:hidden bg-black/30 backdrop-blur-lg border-b border-white/10">
+            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
@@ -121,27 +85,6 @@ export default function Layout({ children }: LayoutProps) {
                   <span>{item.name}</span>
                 </Link>
               ))}
-              {user ? (
-                <button
-                  onClick={async () => {
-                    await signOut()
-                    setMobileMenuOpen(false)
-                    router.push('/')
-                  }}
-                  className="text-red-400 hover:bg-red-700 hover:text-white px-3 py-2 rounded-md text-base font-medium w-full text-left flex items-center space-x-2"
-                >
-                  <LogOut className="h-5 w-5" />
-                  <span>Salir</span>
-                </button>
-              ) : (
-                <Link
-                  href="/auth"
-                  className="bg-purple-600 hover:bg-purple-700 text-white block px-3 py-2 rounded-md text-base font-medium"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Iniciar Sesión
-                </Link>
-              )}
             </div>
           </div>
         )}

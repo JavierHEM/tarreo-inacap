@@ -1,8 +1,6 @@
 // app/layout.tsx
 import './globals.css'
-import '../styles/announcement.css'
 import type { Metadata, Viewport } from 'next'
-import AnnouncementWrapper from '@/components/AnnouncementWrapper'
 
 // Exportación separada para viewport según las recomendaciones de Next.js 15.3.2
 export const viewport: Viewport = {
@@ -41,8 +39,6 @@ export default function RootLayout({
         `}} />
       </head>
       <body className="bg-slate-900 text-slate-50" suppressHydrationWarning={true}>
-        {/* Componente de anuncio del evento */}
-        <AnnouncementWrapper />
         {children}
       </body>
     </html>

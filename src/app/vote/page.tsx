@@ -3,7 +3,7 @@
 import Layout, { Card, Button } from '@/components/Layout'
 import { useUser, supabase } from '@/lib/supabase'
 import { useState, useEffect } from 'react'
-import { Trophy, Star, Gamepad2, Users, Clock, X, Info, Calendar, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Trophy, Star, Gamepad2, Users, Clock, X, Info, Calendar, CheckCircle, AlertTriangle, Lock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAlert } from '@/components/Alert'
 
@@ -32,6 +32,8 @@ export default function VotePage() {
   const [votingLoading, setVotingLoading] = useState<number | null>(null)
   const [studentRecord, setStudentRecord] = useState<{id: string} | null>(null)
   const [showAnnouncement, setShowAnnouncement] = useState(false)
+  const [votingEnabled, setVotingEnabled] = useState(true)
+  const [loadingSettings, setLoadingSettings] = useState(true)
   
   // Sistema de alertas personalizadas
   const { alertProps, showAlert, hideAlert, AlertComponent } = useAlert()
@@ -45,9 +47,41 @@ export default function VotePage() {
     if (user) {
       checkStudentRecord()
       fetchGames()
+      fetchVotingSettings()
       setShowAnnouncement(true)
     }
   }, [user, loading])
+
+  // Verificar si las votaciones están habilitadas globalmente
+  const fetchVotingSettings = async () => {
+    try {
+      setLoadingSettings(true)
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('key', 'voting_enabled')
+        .single()
+
+      if (error && error.code !== 'PGRST116') {
+        // Error diferente a "no se encontraron resultados"
+        throw error
+      }
+
+      // Si existe la configuración, verificar el valor
+      if (data) {
+        setVotingEnabled(data.value === 'true')
+      } else {
+        // Si no existe la configuración, las votaciones están habilitadas por defecto
+        setVotingEnabled(true)
+      }
+    } catch (error) {
+      console.error('Error fetching voting settings:', error)
+      // Por defecto, permitir votaciones si hay un error
+      setVotingEnabled(true)
+    } finally {
+      setLoadingSettings(false)
+    }
+  }
 
   const fetchGames = async () => {
     try {
@@ -144,6 +178,12 @@ export default function VotePage() {
   }
 
   const handleVote = async (gameId: number) => {
+    // Verificar si las votaciones están habilitadas globalmente
+    if (!votingEnabled) {
+      showAlert('error', 'Votaciones deshabilitadas: Las votaciones han sido deshabilitadas temporalmente por el administrador.')
+      return
+    }
+    
     if (!user || !studentRecord) {
       showAlert('warning', 'Necesitas registrarte como estudiante para votar')
       return
@@ -440,12 +480,17 @@ export default function VotePage() {
 
                     <Button
                       onClick={() => handleVote(game.id)}
-                      disabled={votingLoading === game.id}
-                      variant={hasUserVoted(game.id) ? 'danger' : 'primary'}
+                      disabled={votingLoading === game.id || !votingEnabled || loadingSettings}
+                      variant={hasUserVoted(game.id) ? 'danger' : !votingEnabled ? 'secondary' : 'primary'}
                       className="min-w-[100px]"
                     >
                       {votingLoading === game.id ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      ) : !votingEnabled ? (
+                        <>
+                          <Lock className="h-4 w-4 mr-1" />
+                          <span>Deshabilitado</span>
+                        </>
                       ) : hasUserVoted(game.id) ? (
                         'Quitar voto'
                       ) : (
@@ -459,16 +504,31 @@ export default function VotePage() {
           </div>
         ))}
 
-        {/* Recordatorio */}
-        <Card className="text-center max-w-2xl mx-auto">
-          <Clock className="h-12 w-12 text-blue-400 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-white mb-2">
-            ¡Las votaciones están abiertas!
-          </h3>
-          <p className="text-gray-300">
-            Puedes cambiar tus votos en cualquier momento hasta que se cierren las votaciones.
-            Los resultados finales determinarán qué juegos tendrán torneos oficiales.
-          </p>
+        {/* Recordatorio o Aviso de votaciones deshabilitadas */}
+        <Card className={`text-center max-w-2xl mx-auto ${!votingEnabled ? 'bg-red-900/30' : ''}`}>
+          {votingEnabled ? (
+            <>
+              <Clock className="h-12 w-12 text-blue-400 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-white mb-2">
+                ¡Las votaciones están abiertas!
+              </h3>
+              <p className="text-gray-300">
+                Puedes cambiar tus votos en cualquier momento hasta que se cierren las votaciones.
+                Los resultados finales determinarán qué juegos tendrán torneos oficiales.
+              </p>
+            </>
+          ) : (
+            <>
+              <Lock className="h-12 w-12 text-red-400 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-white mb-2">
+                Votaciones deshabilitadas
+              </h3>
+              <p className="text-gray-300">
+                Las votaciones han sido temporalmente deshabilitadas por el administrador.
+                Por favor, intenta más tarde o contacta a los organizadores para más información.
+              </p>
+            </>
+          )}
         </Card>
       </div>
     </Layout>
